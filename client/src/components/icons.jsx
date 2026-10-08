@@ -40,6 +40,12 @@ export const CheckIcon = (p) => (
 export const RetryIcon = (p) => (
   <svg {...base} width={15} height={15} {...p}><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4" /></svg>
 );
+export const LinkIcon = (p) => (
+  <svg {...base} width={14} height={14} {...p}><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1" /></svg>
+);
+export const AlertIcon = (p) => (
+  <svg {...base} width={14} height={14} {...p}><path d="M12 8v5M12 16.5v.5M10.3 3.9L2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /></svg>
+);
 export const LogoutIcon = (p) => (
   <svg {...base} width={16} height={16} {...p}><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 16l-4-4 4-4M6 12h10" /></svg>
 );
@@ -49,8 +55,9 @@ export function Drop({ size = 28 }) {
     <svg width={size} height={size} viewBox="0 0 512 512" aria-hidden="true">
       <defs>
         <linearGradient id="dropGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="var(--alkaline)" />
-          <stop offset="1" stopColor="var(--accent)" />
+          <stop offset="0" stopColor="#9fe6b2" />
+          <stop offset="0.48" stopColor="#f6dc8f" />
+          <stop offset="1" stopColor="#ff9064" />
         </linearGradient>
       </defs>
       <path d="M256 40c-74 102-150 182-150 274a150 150 0 0 0 300 0c0-92-76-172-150-274z" fill="url(#dropGrad)" />

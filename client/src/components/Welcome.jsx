@@ -39,7 +39,7 @@ export default function Welcome({ settings, onPick, disabled }) {
         What’s on your <em>plate</em> today?
       </h1>
       <p className="welcome-sub rise" style={{ '--d': '180ms' }}>
-        Ask if a food is allowed, get a detox-safe recipe, or plan your day.
+        Ask if a food is allowed, get a detox-safe recipe, or paste a recipe link and I’ll check it.
       </p>
       <div className="suggestions">
         {SUGGESTIONS.map((s, i) => (

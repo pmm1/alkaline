@@ -36,6 +36,11 @@ db.exec(`
   );
 `);
 
+// Columns added after the first release.
+const messageColumns = db.prepare('PRAGMA table_info(messages)').all().map((c) => c.name);
+if (!messageColumns.includes('links')) db.exec('ALTER TABLE messages ADD COLUMN links TEXT');
+if (!messageColumns.includes('link_context')) db.exec('ALTER TABLE messages ADD COLUMN link_context TEXT');
+
 function transaction(fn) {
   db.exec('BEGIN');
   try {
@@ -59,10 +64,10 @@ const q = {
            (SELECT substr(content, 1, 120) FROM messages m WHERE m.thread_id = t.id ORDER BY seq DESC LIMIT 1) AS preview
     FROM threads t WHERE t.id = ?
   `),
-  messages: db.prepare('SELECT id, role, content, created_at FROM messages WHERE thread_id = ? ORDER BY seq'),
+  messages: db.prepare('SELECT id, role, content, links, created_at FROM messages WHERE thread_id = ? ORDER BY seq'),
   recentMessages: db.prepare(`
-    SELECT role, content FROM (
-      SELECT seq, role, content FROM messages WHERE thread_id = ? ORDER BY seq DESC LIMIT ?
+    SELECT role, content, link_context FROM (
+      SELECT seq, role, content, link_context FROM messages WHERE thread_id = ? ORDER BY seq DESC LIMIT ?
     ) ORDER BY seq
   `),
   lastMessage: db.prepare('SELECT seq, role FROM messages WHERE thread_id = ? ORDER BY seq DESC LIMIT 1'),
@@ -71,7 +76,9 @@ const q = {
   renameThread: db.prepare('UPDATE threads SET title = ? WHERE id = ?'),
   touchThread: db.prepare('UPDATE threads SET updated_at = ? WHERE id = ?'),
   deleteThread: db.prepare('DELETE FROM threads WHERE id = ?'),
-  insertMessage: db.prepare('INSERT INTO messages (id, thread_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)'),
+  insertMessage: db.prepare(
+    'INSERT INTO messages (id, thread_id, role, content, created_at, links, link_context) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ),
   deleteMessage: db.prepare('DELETE FROM messages WHERE seq = ?'),
   getSetting: db.prepare('SELECT value FROM settings WHERE key = ?'),
   setSetting: db.prepare(
@@ -88,7 +95,13 @@ const toSummary = (row) =>
     preview: row.preview ?? '',
   };
 
-const toMessage = (row) => ({ id: row.id, role: row.role, content: row.content, createdAt: row.created_at });
+const toMessage = (row) => ({
+  id: row.id,
+  role: row.role,
+  content: row.content,
+  createdAt: row.created_at,
+  ...(row.links ? { links: JSON.parse(row.links) } : {}),
+});
 
 export const newId = () => crypto.randomUUID();
 
@@ -106,9 +119,12 @@ export function getThread(id) {
   return { ...thread, messages: q.messages.all(id).map(toMessage) };
 }
 
-/** The last `limit` messages of a thread, oldest first, shaped for the model. */
+/** The last `limit` messages of a thread, oldest first, shaped for the model (with any linked page text). */
 export function recentMessages(threadId, limit) {
-  return q.recentMessages.all(threadId, limit).map(({ role, content }) => ({ role, content }));
+  return q.recentMessages.all(threadId, limit).map(({ role, content, link_context }) => ({
+    role,
+    content: link_context ? `${content}\n\n${link_context}` : content,
+  }));
 }
 
 export function messageCount(threadId) {
@@ -134,10 +150,18 @@ export function deleteThread(id) {
   return q.deleteThread.run(id).changes > 0;
 }
 
-export function addMessage(threadId, role, content) {
-  const message = { id: newId(), role, content, createdAt: new Date().toISOString() };
+export function addMessage(threadId, role, content, { links = null, linkContext = null } = {}) {
+  const message = { id: newId(), role, content, createdAt: new Date().toISOString(), ...(links?.length ? { links } : {}) };
   transaction(() => {
-    q.insertMessage.run(message.id, threadId, role, content, message.createdAt);
+    q.insertMessage.run(
+      message.id,
+      threadId,
+      role,
+      content,
+      message.createdAt,
+      links?.length ? JSON.stringify(links) : null,
+      linkContext || null
+    );
     q.touchThread.run(message.createdAt, threadId);
   });
   return message;
@@ -168,7 +192,7 @@ function migrateFromJson() {
     for (const t of data.threads ?? []) {
       q.insertThread.run(t.id, t.title, t.createdAt, t.updatedAt);
       for (const m of t.messages ?? []) {
-        q.insertMessage.run(m.id, t.id, m.role, m.content, m.createdAt);
+        q.insertMessage.run(m.id, t.id, m.role, m.content, m.createdAt, null, null);
       }
     }
     if (data.settings?.detoxStart) q.setSetting.run('detoxStart', data.settings.detoxStart);

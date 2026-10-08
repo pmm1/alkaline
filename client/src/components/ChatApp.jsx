@@ -13,7 +13,7 @@ export default function ChatApp({ onSignedOut }) {
   const [activeId, setActiveId] = useState(null);
   const [messagesByThread, setMessagesByThread] = useState({});
   const [loadingThread, setLoadingThread] = useState(false);
-  const [streaming, setStreaming] = useState(null); // { threadId, text, thinking }
+  const [streaming, setStreaming] = useState(null); // { threadId, text, thinking, status }
   const [error, setError] = useState(null); // { threadId, message }
   const [settings, setSettings] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -112,11 +112,13 @@ export default function ChatApp({ onSignedOut }) {
                 list.map((m) => (m.pending ? data.userMessage : m))
               );
             }
+          } else if (event === 'status') {
+            setStreaming((s) => s && { ...s, status: data.text });
           } else if (event === 'thinking') {
-            setStreaming((s) => s && { ...s, thinking: true });
+            setStreaming((s) => s && { ...s, thinking: true, status: null });
           } else if (event === 'delta') {
             text += data.text;
-            setStreaming((s) => s && { ...s, text, thinking: false });
+            setStreaming((s) => s && { ...s, text, thinking: false, status: null });
           } else if (event === 'done') {
             finished = true;
             setThreadMessages(threadId, (list) => [...list, data.message]);
@@ -252,6 +254,7 @@ export default function ChatApp({ onSignedOut }) {
                   message={{ id: 'streaming', role: 'assistant', content: streaming.text }}
                   streaming
                   thinking={streaming.thinking}
+                  status={streaming.status}
                 />
               )}
               {error && error.threadId === activeId && (

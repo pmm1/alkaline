@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as store from './store.js';
 import { streamChat } from './llm.js';
+import { findLinks, readLinks, stripLinks } from './links.js';
 import { buildSystemPrompt, detoxStatus } from './prompt.js';
 
 const MAX_MESSAGE_CHARS = 8000;
@@ -54,6 +55,7 @@ apiRouter.delete('/threads/:id', (req, res) => {
 });
 
 // Adds a user message and streams the assistant's reply as Server-Sent Events.
+// Links in the message are fetched first, so the model can read the pages.
 apiRouter.post('/threads/:id/messages', async (req, res) => {
   const threadId = req.params.id;
   if (!store.summary(threadId)) return res.status(404).json({ error: 'Chat not found' });
@@ -62,37 +64,71 @@ apiRouter.post('/threads/:id/messages', async (req, res) => {
   if (!content) return res.status(400).json({ error: 'Message is empty' });
   if (content.length > MAX_MESSAGE_CHARS) return res.status(400).json({ error: 'Message is too long' });
 
-  if (store.messageCount(threadId) === 0) store.renameThread(threadId, makeTitle(content));
-  const userMessage = store.addMessage(threadId, 'user', content);
+  const stream = openStream(res);
 
-  await streamReply(threadId, res, { userMessage });
+  const urls = findLinks(content);
+  let links = [];
+  let linkContext = '';
+  if (urls.length) {
+    const hosts = [...new Set(urls.map((u) => new URL(u).hostname.replace(/^www\./, '')))];
+    stream.send('status', { text: `Reading ${hosts.join(', ')}…` });
+    ({ links, context: linkContext } = await readLinks(urls, stream.signal));
+  }
+
+  // The chat may have been deleted while the pages were loading.
+  if (!store.summary(threadId)) return stream.end();
+  if (store.messageCount(threadId) === 0) store.renameThread(threadId, makeTitle(titleFor(content, links)));
+  const userMessage = store.addMessage(threadId, 'user', content, { links, linkContext });
+  stream.send('meta', { thread: store.summary(threadId), userMessage });
+
+  if (stream.signal.aborted) return stream.end();
+  await streamAssistant(threadId, stream);
 });
 
 // Retries the reply to the last user message (after an error or to get a different answer).
+// Linked pages are not fetched again; the text saved with the message is reused.
 apiRouter.post('/threads/:id/regenerate', async (req, res) => {
   const threadId = req.params.id;
   if (!store.summary(threadId)) return res.status(404).json({ error: 'Chat not found' });
   store.deleteLastAssistantMessage(threadId);
   if (store.lastMessageRole(threadId) !== 'user') return res.status(400).json({ error: 'Nothing to answer' });
-  await streamReply(threadId, res, {});
+
+  const stream = openStream(res);
+  stream.send('meta', { thread: store.summary(threadId) });
+  await streamAssistant(threadId, stream);
 });
 
-async function streamReply(threadId, res, meta) {
+// A message that is mostly a link gets the page's title as the chat title.
+function titleFor(content, links) {
+  const words = stripLinks(content);
+  if (words.length >= 16) return words;
+  const page = links.find((l) => l.ok)?.title;
+  return page || words || links[0]?.host || content;
+}
+
+function openStream(res) {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no',
   });
-  const send = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-
-  send('meta', { thread: store.summary(threadId), ...meta });
-
   const controller = new AbortController();
   res.on('close', () => {
     if (!res.writableEnded) controller.abort();
   });
+  return {
+    signal: controller.signal,
+    send(event, data) {
+      if (!res.writableEnded && !res.destroyed) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    },
+    end() {
+      if (!res.writableEnded) res.end();
+    },
+  };
+}
 
+async function streamAssistant(threadId, stream) {
   const messages = [
     { role: 'system', content: buildSystemPrompt(store.getSettings()) },
     ...store.recentMessages(threadId, HISTORY_LIMIT),
@@ -103,20 +139,20 @@ async function streamReply(threadId, res, meta) {
   try {
     await streamChat({
       messages,
-      signal: controller.signal,
+      signal: stream.signal,
       onThinking: () => {
-        if (!sentThinking) send('thinking', {});
+        if (!sentThinking) stream.send('thinking', {});
         sentThinking = true;
       },
       onDelta: (chunk) => {
         text += chunk;
-        send('delta', { text: chunk });
+        stream.send('delta', { text: chunk });
       },
     });
   } catch (err) {
-    if (!controller.signal.aborted) {
+    if (!stream.signal.aborted) {
       console.error('Chat stream failed:', err.message);
-      send('error', { message: err.message || 'Something went wrong talking to the model.' });
+      stream.send('error', { message: err.message || 'Something went wrong talking to the model.' });
     }
   }
 
@@ -124,7 +160,7 @@ async function streamReply(threadId, res, meta) {
   // The chat may have been deleted while the answer was streaming.
   if (text.trim() && store.summary(threadId)) {
     const message = store.addMessage(threadId, 'assistant', text);
-    if (!res.writableEnded && !controller.signal.aborted) send('done', { message, thread: store.summary(threadId) });
+    if (!stream.signal.aborted) stream.send('done', { message, thread: store.summary(threadId) });
   }
-  if (!res.writableEnded) res.end();
+  stream.end();
 }

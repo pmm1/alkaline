@@ -10,6 +10,7 @@ function describeFailure(status, body) {
   } catch {}
   if (status === 401) return 'Z.ai rejected the API key. Check ZAI_API_KEY in .env (it should be the full key, including the part after the dot).';
   if (status === 429) return `Z.ai rate limit or plan quota reached. ${detail}`.trim();
+  if (status === 400 && /cannot be disabled/i.test(detail)) return `"${config.zai.model}" can't run with thinking off on this endpoint. Set ZAI_REASONING_EFFORT=low in .env.`;
   if (status === 400 && /model/i.test(detail)) return `Z.ai did not accept the model "${config.zai.model}". ${detail}`;
   return `Z.ai error ${status}: ${String(detail).slice(0, 300)}`;
 }
@@ -19,7 +20,10 @@ function describeFailure(status, body) {
  * Calls onDelta(text) for each content chunk and onThinking() while the model is reasoning.
  */
 export async function streamChat({ messages, signal, onDelta, onThinking }) {
-  const { apiKey, baseUrl, model, thinking, temperature, maxTokens } = config.zai;
+  const { apiKey, baseUrl, model, thinking, reasoningEffort, temperature, maxTokens } = config.zai;
+  const reasoning = reasoningEffort
+    ? { reasoning_effort: reasoningEffort }
+    : { thinking: { type: thinking ? 'enabled' : 'disabled' } };
 
   const res = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
@@ -34,7 +38,7 @@ export async function streamChat({ messages, signal, onDelta, onThinking }) {
       stream: true,
       temperature,
       max_tokens: maxTokens,
-      thinking: { type: thinking ? 'enabled' : 'disabled' },
+      ...reasoning,
     }),
     signal,
   });

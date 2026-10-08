@@ -41,6 +41,7 @@ These clarify foods that are not explicitly named on the detox list. The rule st
 
 ## Drinks
 - **Sparkling water, kombucha, soda (including diet), tonic:** ❌. Anything carbonated is out.
+- **Chamomile or ginger tea with honey, sugar or agave:** ❌. Dr. Koufman says the tea itself must be unsweetened. Artificial sweetener is the only sweetener allowed in tea. (Honey is still fine in food, like oatmeal.)
 - **Black tea, green tea, matcha:** ❌ during detox (caffeine and not on the list). Only chamomile and ginger tea.
 - **Mint or peppermint tea:** ❌.
 - **Decaf coffee:** counts toward the 1 cup per day.

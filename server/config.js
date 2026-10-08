@@ -39,6 +39,8 @@ export const config = {
     baseUrl: (env.ZAI_BASE_URL || 'https://api.z.ai/api/coding/paas/v4').replace(/\/+$/, ''),
     model: env.ZAI_MODEL || 'glm-5.3',
     thinking: env.ZAI_THINKING === 'true',
+    // Standard-API flash can't turn thinking off; it takes reasoning_effort (low/high/max) instead.
+    reasoningEffort: env.ZAI_REASONING_EFFORT?.trim() || null,
     temperature: Number(env.ZAI_TEMPERATURE ?? 0.6),
     maxTokens: Number(env.ZAI_MAX_TOKENS) || 4096,
   },

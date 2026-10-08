@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { CheckIcon, CopyIcon, RetryIcon } from './icons.jsx';
+import { AlertIcon, CheckIcon, CopyIcon, LinkIcon, RetryIcon } from './icons.jsx';
 
 function firstText(node) {
   if (typeof node === 'string') return node;
@@ -48,13 +48,35 @@ const markdownComponents = {
   },
 };
 
-function Message({ message, streaming = false, thinking = false, canRetry = false, onRetry }) {
+function LinkChips({ links }) {
+  return (
+    <div className="link-chips">
+      {links.map((link) => (
+        <a
+          key={link.url}
+          className={`link-chip${link.ok ? '' : ' failed'}`}
+          href={link.url}
+          target="_blank"
+          rel="noreferrer noopener"
+          title={link.ok ? link.url : link.error}
+        >
+          {link.ok ? <LinkIcon /> : <AlertIcon />}
+          <span className="link-chip-title">{link.ok ? link.title : `Couldn’t read ${link.host}`}</span>
+          {link.ok && link.recipe && <span className="link-chip-tag">recipe</span>}
+        </a>
+      ))}
+    </div>
+  );
+}
+
+function Message({ message, streaming = false, thinking = false, status = null, canRetry = false, onRetry }) {
   const [copied, setCopied] = useState(false);
 
   if (message.role === 'user') {
     return (
       <div className={`msg msg-user${message.pending ? ' pending' : ''}`}>
         <div className="bubble">{message.content}</div>
+        {message.links?.length > 0 && <LinkChips links={message.links} />}
       </div>
     );
   }
@@ -72,11 +94,11 @@ function Message({ message, streaming = false, thinking = false, canRetry = fals
   return (
     <div className={`msg msg-assistant${streaming ? ' streaming' : ''}`}>
       {empty && streaming ? (
-        <div className="typing" aria-label={thinking ? 'Thinking' : 'Writing'}>
+        <div className="typing" aria-label={status || (thinking ? 'Thinking' : 'Writing')}>
           <span />
           <span />
           <span />
-          {thinking && <em>thinking</em>}
+          {(status || thinking) && <em>{status || 'thinking'}</em>}
         </div>
       ) : (
         <div className="prose">

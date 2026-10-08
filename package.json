@@ -9,16 +9,16 @@
     "start": "NODE_ENV=production node --disable-warning=ExperimentalWarning server/index.js"
   },
   "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "@vitejs/plugin-react": "^6.1.2",
     "cookie-parser": "^1.4.7",
     "express": "^5.2.1",
+    "linkedom": "^0.18.13",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^6.1.2",
-    "vite": "^8.3.3"
+    "remark-gfm": "^4.0.1",
+    "vite": "^8.3.4"
   },
   "private": true,
   "type": "module",
