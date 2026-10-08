@@ -53,22 +53,30 @@ The server already has nginx, certbot and pm2, with nginx proxying `pmm.is` to p
 
 Check that the server has **Node 22.13 or newer** (`node -v`); SQLite support needs it.
 
-**1. Get the code onto the server.** Either clone it from GitHub:
+The app lives in `~/alkaline`, in your home directory, where you land when you log in. nginx only forwards to port 8080 and never reads files from this folder, so it can live in your home directory without any permission changes.
+
+**1. Get the code onto the server.** Either clone it from GitHub, right after logging in:
 
 ```bash
-git clone https://github.com/pmm1/alkaline.git /var/www/alkaline
+git clone https://github.com/pmm1/alkaline.git
 ```
 
-or copy it from your Mac, from the folder that contains `app/`:
+This creates `~/alkaline`. Or copy it from your Mac, from the folder that contains `app/`:
 
 ```bash
-rsync -av --exclude node_modules --exclude dist --exclude data --exclude .git app/ user@pmm.is:/var/www/alkaline/
+rsync -av --exclude node_modules --exclude dist --exclude data --exclude .git app/ user@pmm.is:alkaline/
 ```
 
-**2. Create `.env` on the server.** It isn't in git, which is deliberate because it holds your password and key. Copy your local `.env` across with `scp`, or create it:
+**2. Create `.env` on the server.** It isn't in git, which is deliberate because it holds your password and key. The simplest way is to copy your local one, from the `app` folder on your Mac:
 
 ```bash
-cd /var/www/alkaline
+scp .env user@pmm.is:alkaline/.env
+```
+
+Or create it on the server:
+
+```bash
+cd ~/alkaline
 cp .env.example .env
 nano .env
 ```
@@ -93,7 +101,7 @@ pm2 delete <old-app-name>
 **4. Install, build and start Alkaline**
 
 ```bash
-cd /var/www/alkaline
+cd ~/alkaline
 npm ci
 npm run build
 pm2 start ecosystem.config.cjs
@@ -109,7 +117,7 @@ If you haven't already, run `pm2 startup` once so pm2 comes back after a reboot.
 With git, push from your Mac, then on the server:
 
 ```bash
-cd /var/www/alkaline
+cd ~/alkaline
 git pull
 npm ci
 npm run build
